@@ -39,14 +39,14 @@ export async function compile(compiler) {
       }
     }
 
-    compiled.add(info.moduleName);
-
     let status;
     if (info.isRoot) {
       status = await compiler.compileProgram(info.filename);
     } else {
       status = await compiler.compileModule(info.filename);
     }
+
+    compiled.add(info.moduleName);
 
     if (typeof status === 'number' && status !== 0) {
       process.exit(status);

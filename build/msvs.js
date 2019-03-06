@@ -94,7 +94,7 @@ class Compiler {
   }
 
   compileProgram(filename) {
-    return this._cl(filename);
+    return this._cl(filename, 'Unicode.obj');
   }
 
   getOutputPath({ filename, isRoot }) {
