@@ -6,6 +6,7 @@ import { promisify } from 'util';
 import { walk } from './walker.js';
 
 const dirname = Path.dirname(fileURLToPath(import.meta.url));
+const outputDirectory = Path.resolve(dirname, './_out');
 const stat = promisify(FS.stat);
 
 async function isNewer(first, second) {
@@ -21,8 +22,11 @@ async function isNewer(first, second) {
 }
 
 export async function compile(compiler) {
-  let outputDirectory = Path.resolve(dirname, './_out');
   let target = 'x64';
+
+  if (!FS.existsSync(outputDirectory)) {
+    FS.mkdirSync(outputDirectory);
+  }
 
   await compiler.initialize({ outputDirectory, target });
 
