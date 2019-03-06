@@ -1,4 +1,6 @@
+#include <stdint.h>
+
 export module BasicTypes;
 
-export using uint32 = unsigned int;
-export using uint16 = unsigned short;
+export using uint32 = uint32_t;
+export using uint16 = uint16_t;
