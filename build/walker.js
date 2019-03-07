@@ -5,18 +5,17 @@ import { fileURLToPath } from 'url';
 const sourceDir = Path.resolve(fileURLToPath(import.meta.url), '../../src');
 const importPattern = /(?:^|\n)import ([^;\n\r]+)/g;
 
-export async function walk(moduleName, callback, moduleMap = new Map()) {
-  let isRoot = moduleMap.size === 0;
-  let state = moduleMap.get(moduleName);
+export async function walk(name, callback, moduleMap = new Map()) {
+  let state = moduleMap.get(name);
 
   switch (state) {
     case 'visiting': throw new Error('Module cycle detected');
     case 'visited': return;
   }
 
-  moduleMap.set(moduleName, 'visiting');
+  moduleMap.set(name, 'visiting');
 
-  let filename = Path.resolve(sourceDir, moduleName + '.cpp');
+  let filename = Path.resolve(sourceDir, name + '.cpp');
   let source = FS.readFileSync(filename, 'utf8');
 
   let imports = [];
@@ -24,11 +23,16 @@ export async function walk(moduleName, callback, moduleMap = new Map()) {
     imports.push(match[1]);
   }
 
-  for (let name of imports) {
-    await walk(name, callback, moduleMap);
+  for (let importName of imports) {
+    await walk(importName, callback, moduleMap);
   }
 
-  await callback({ filename, moduleName, isRoot, imports });
+  await callback({
+    name,
+    filename,
+    imports,
+    output: '',
+  });
 
-  moduleMap.set(moduleName, 'visited');
+  moduleMap.set(name, 'visited');
 }

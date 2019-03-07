@@ -30,32 +30,31 @@ export async function compile(compiler) {
 
   await compiler.initialize({ outputDirectory, target });
 
-  console.log(`[Building ${ target } -> ${ outputDirectory }]`);
+  console.log(`=> Compiling ${ target } -> ${ outputDirectory }`);
 
   let compiled = new Set();
+  let outputs = [];
 
   await walk('scratch', async info => {
+    info.output = compiler.getModuleOutputPath(info.filename);
+    outputs.unshift(info.output);
+
     if (!info.imports.some(id => compiled.has(id))) {
-      let outPath = compiler.getOutputPath(info);
-      let newer = await isNewer(info.filename, outPath);
+      let newer = await isNewer(info.filename, info.output);
       if (!newer) {
         return;
       }
     }
 
-    let status;
-    if (info.isRoot) {
-      status = await compiler.compileProgram(info.filename);
-    } else {
-      status = await compiler.compileModule(info.filename);
-    }
+    await compiler.compileModule(info.filename);
 
-    compiled.add(info.moduleName);
+    compiled.add(info.name);
 
     if (typeof status === 'number' && status !== 0) {
       process.exit(status);
     }
   });
 
-  await compiler.finalize();
+  console.log(`=> Linking`);
+  await compiler.link({ outputs });
 }

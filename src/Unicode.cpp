@@ -3,26 +3,26 @@ export module Unicode;
 import BasicTypes;
 import UnicodeData;
 
-struct whitespace_data {
-  static constexpr int count = sizeof(whitespace_spans) / sizeof(whitespace_span);
+struct WhitespaceData {
+  static constexpr int count = sizeof(whitespace_spans) / sizeof(WhitespaceSpan);
   static constexpr auto table = whitespace_spans;
-  using element = whitespace_span;
+  using Element = WhitespaceSpan;
 };
 
-struct identifier_data {
-  static constexpr int count = sizeof(identifier_spans) / sizeof(identifier_span);
+struct IdentifierData {
+  static constexpr int count = sizeof(identifier_spans) / sizeof(IdentifierSpan);
   static constexpr auto table = identifier_spans;
-  using element = identifier_span;
+  using Element = IdentifierSpan;
 };
 
 template<typename T>
-const typename T::element* search_table(uint32 code) {
+typename const T::Element* search_table(uint32 code) {
   int right = T::count - 1;
   int left = 0;
 
   while (left <= right) {
     int mid = (left + right) >> 1;
-    const T::element& span = T::table[mid];
+    const T::Element& span = T::table[mid];
 
     if (code < span.id) {
       right = mid - 1;
@@ -37,14 +37,14 @@ const typename T::element* search_table(uint32 code) {
 }
 
 export bool is_whitespace(uint32 code) {
-  return search_table<whitespace_data>(code) != nullptr;
+  return search_table<WhitespaceData>(code) != nullptr;
 }
 
 export bool is_identifier_start(uint32 code) {
-  auto* span = search_table<identifier_data>(code);
+  auto* span = search_table<IdentifierData>(code);
   return span != nullptr && span->start;
 }
 
-export bool is_identifier_continue(uint32 code) {
-  return search_table<identifier_data>(code) != nullptr;
+export bool is_identifier_part(uint32 code) {
+  return search_table<IdentifierData>(code) != nullptr;
 }

@@ -89,31 +89,33 @@ class Compiler {
     this._env = getEnvVars(outputDirectory, target);
   }
 
+  getModuleOutputPath(filename) {
+    return Path.resolve(this._out, Path.basename(filename, '.cpp') + '.obj');
+  }
+
   compileModule(filename) {
     return this._cl('/c', '/module:interface', filename);
   }
 
-  compileProgram(filename) {
-    return this._cl(filename, 'Unicode.obj');
+  link({ outputs }) {
+    return this._run('link', [
+      '/nologo',
+      ...outputs,
+    ]);
   }
-
-  getOutputPath({ filename, isRoot }) {
-    let ext = isRoot ? '.exe' : '.obj';
-    return Path.resolve(this._out, Path.basename(filename, '.cpp') + ext);
-  }
-
-  finalize() {}
 
   _cl(...args) {
-    args = [
+    return this._run('cl', [
       '/std:c++latest',
       '/EHsc',
       '/nologo',
       '/experimental:module',
       ...args
-    ];
+    ]);
+  }
 
-    let result = spawnSync('cl', args, {
+  _run(cmd, args) {
+    let result = spawnSync(cmd, args, {
       stdio: 'inherit',
       cwd: this._out,
       env: this._env,
