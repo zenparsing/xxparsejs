@@ -94,18 +94,15 @@ class Compiler {
   }
 
   compileModule(filename) {
-    return this._cl('/c', '/module:interface', filename);
+    this._cl('/c', '/module:interface', filename);
   }
 
   link({ outputs }) {
-    return this._run('link', [
-      '/nologo',
-      ...outputs,
-    ]);
+    this._run('link', ['/nologo', ...outputs ]);
   }
 
   _cl(...args) {
-    return this._run('cl', [
+    this._run('cl', [
       '/std:c++latest',
       '/EHsc',
       '/nologo',
@@ -126,7 +123,9 @@ class Compiler {
       throw result.error;
     }
 
-    return result.status;
+    if (result.status !== 0) {
+      process.exit(result.status);
+    }
   }
 
 }
