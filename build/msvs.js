@@ -89,16 +89,16 @@ class Compiler {
     this._env = getEnvVars(outputDirectory, target);
   }
 
-  getModuleOutputPath(filename) {
-    // TODO: dumping everything into one directory means
-    // that files with the same name collide even if they
-    // are in different folders or have different module
-    // identifiers.
-    return Path.resolve(this._out, Path.basename(filename, '.cpp') + '.obj');
+  moduleOutputFile(name) {
+    return name + '.obj';
   }
 
-  compileModule(filename) {
-    this._cl('/c', '/module:interface', filename);
+  compileModule({ filename, output }) {
+    this._cl(
+      '/c',
+      `/Fo${output}`,
+      '/module:interface', filename
+    );
   }
 
   link({ outputs }) {

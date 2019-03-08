@@ -42,7 +42,7 @@ export async function compile(main, compiler) {
   let outputs = [];
 
   await walk(main, async info => {
-    info.output = compiler.getModuleOutputPath(info.filename);
+    info.output = compiler.moduleOutputFile(info.name);
     outputs.unshift(info.output);
 
     if (!info.imports.some(id => compiled.has(id))) {
@@ -52,7 +52,7 @@ export async function compile(main, compiler) {
       }
     }
 
-    await compiler.compileModule(info.filename);
+    await compiler.compileModule(info);
 
     compiled.add(info.name);
 

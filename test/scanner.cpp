@@ -5,10 +5,19 @@
 
 import Scanner;
 
+std::ostream& operator<<(std::ostream& out, Token t) {
+  switch (t) {
+    case Token::end: return out << "end of file";
+    case Token::error: return out << "ERROR";
+    case Token::comment: return out << "COMMENT";
+    default: return out << static_cast<int>(t);
+  }
+}
+
 template<typename T>
 void print_tokens(const T& tokens) {
   for (auto t : tokens) {
-    std::cout << static_cast<int>(t) << "\n";
+    std::cout << t << "\n";
   }
 }
 
