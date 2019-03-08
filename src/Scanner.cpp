@@ -24,6 +24,14 @@ export bool is_ascii_digit(uint32 cp) {
 }
 
 // TODO: why does this have to be exported?
+export bool is_hex_digit(uint32 cp) {
+  return
+    cp >= '0' && cp <= '9' ||
+    cp >= 'a' && cp <= 'f' ||
+    cp >= 'A' && cp <= 'F';
+}
+
+// TODO: why does this have to be exported?
 export bool is_newline_char(uint32 cp, bool ascii_only = false) {
   if (cp == '\n' || cp == '\r') {
     return true;
@@ -91,8 +99,17 @@ struct Scanner {
     return _iter == _end ? 0 : *_iter;
   }
 
+  bool _peek_range(uint32 low, uint32 high) {
+    auto n = _peek();
+    return n >= low && n <= high;
+  }
+
+  bool _can_shift() {
+    return _iter != _end;
+  }
+
   Token _start(Context context) {
-    if (_iter == _end) {
+    if (!_can_shift()) {
       return Token::end;
     }
 
@@ -174,7 +191,11 @@ struct Scanner {
   }
 
   Token _newline(uint32 cp) {
-    return Token::error;
+    if (cp == '\r' && _peek() == '\n') {
+      _advance();
+    }
+    _span.newline_before = true;
+    return Token::whitespace;
   }
 
   Token _identifier(uint32 cp) {
@@ -190,19 +211,88 @@ struct Scanner {
   }
 
   Token _legacy_octal_number() {
-    return Token::error;
+    // TODO: record strict mode error
+    if (!_peek_range('0', '7')) {
+      return Token::error;
+    }
+    _advance();
+    while (true) {
+      if (_peek_range('0', '7')) {
+        _advance();
+      } else {
+        break;
+      }
+    }
+    _read_integer_suffix();
+    return _finish_number();
   }
 
   Token _octal_number() {
-    return Token::error;
+    // assert(_peek() == 'o')
+    _advance();
+    if (!_peek_range('0', '7')) {
+      return Token::error;
+    }
+    _advance();
+    while (true) {
+      if (_peek_range('0', '7')) {
+        _advance();
+      } else {
+        break;
+      }
+    }
+    _read_integer_suffix();
+    return _finish_number();
   }
 
   Token _hex_number() {
-    return Token::error;
+    // assert(_peek() == 'x')
+    _advance();
+    if (!is_hex_digit(_peek())) {
+      return Token::error;
+    }
+    _advance();
+    while (is_hex_digit(_peek())) {
+      _advance();
+    }
+    _read_integer_suffix();
+    return _finish_number();
   }
 
   Token _binary_number() {
-    return Token::error;
+    // assert(_peek() == 'b')
+    _advance();
+    if (!_peek_range('0', '1')) {
+      return Token::error;
+    }
+    _advance();
+    while (true) {
+      if (_peek_range('0', '1')) {
+        _advance();
+      } else {
+        break;
+      }
+    }
+    _read_integer_suffix();
+    return _finish_number();
+  }
+
+  void _read_integer_suffix() {
+    if (_peek() == 'n') {
+      // TODO: record this info in span
+      _advance();
+    }
+  }
+
+  Token _finish_number() {
+    if (auto n = _peek(); n < 128) {
+      if (token_start_table[n] == TokenStartType::identifier) {
+        return Token::error;
+      }
+    } else if (is_identifier_start(n)) {
+      return Token::error;
+    }
+    return Token::number;
   }
 
   Token _regexp() {
@@ -210,10 +300,23 @@ struct Scanner {
   }
 
   Token _line_comment() {
-    return Token::error;
+    // assert(_peek() == '/')
+    _advance();
+    while (_can_shift() && !is_newline_char(_peek())) {
+      _advance();
+    }
+    return Token::comment;
   }
 
   Token _block_comment() {
+    // assert(_peek() == '*')
+    _advance();
+    while (_can_shift()) {
+      if (_shift() == '*' && _peek() == '/') {
+        _advance();
+        return Token::comment;
+      }
+    }
     return Token::error;
   }
 

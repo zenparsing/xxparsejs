@@ -90,6 +90,10 @@ class Compiler {
   }
 
   getModuleOutputPath(filename) {
+    // TODO: dumping everything into one directory means
+    // that files with the same name collide even if they
+    // are in different folders or have different module
+    // identifiers.
     return Path.resolve(this._out, Path.basename(filename, '.cpp') + '.obj');
   }
 
@@ -98,7 +102,7 @@ class Compiler {
   }
 
   link({ outputs }) {
-    this._run('link', ['/nologo', ...outputs ]);
+    this._run('link', ['/nologo', ...outputs]);
   }
 
   _cl(...args) {
@@ -130,4 +134,10 @@ class Compiler {
 
 }
 
-compile(new Compiler());
+let main = process.argv[2];
+if (!main) {
+  console.log('No main module specified');
+  process.exit(1);
+}
+
+compile(main, new Compiler());

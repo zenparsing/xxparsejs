@@ -27,7 +27,7 @@ async function isNewer(first, second) {
   }
 }
 
-export async function compile(compiler) {
+export async function compile(main, compiler) {
   let target = 'x64';
 
   if (!await AFS.exists(outputDirectory)) {
@@ -41,7 +41,7 @@ export async function compile(compiler) {
   let compiled = new Set();
   let outputs = [];
 
-  await walk('scratch', async info => {
+  await walk(main, async info => {
     info.output = compiler.getModuleOutputPath(info.filename);
     outputs.unshift(info.output);
 
@@ -62,7 +62,9 @@ export async function compile(compiler) {
   });
 
   console.log(`=> Linking`);
-  await compiler.link({ outputs });
+  if (compiled.size > 0) {
+    await compiler.link({ outputs });
+  }
 }
 
 async function getImportsFromFile(filename) {
@@ -75,7 +77,12 @@ async function getImportsFromFile(filename) {
 }
 
 async function resolveModule(name) {
-  return Path.resolve(sourceDirectory, name + '.cpp');
+  let dir = sourceDirectory;
+  // Modules starting with "test." are in the test dir
+  if (name.startsWith('test.')) {
+    dir = Path.resolve(dirname, '../');
+  }
+  return Path.resolve(dir, name.replace('.', '/') + '.cpp');
 }
 
 export async function walk(name, callback, moduleMap = new Map()) {
