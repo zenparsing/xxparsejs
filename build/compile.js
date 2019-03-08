@@ -46,7 +46,8 @@ export async function compile(main, compiler) {
     outputs.unshift(info.output);
 
     if (!info.imports.some(id => compiled.has(id))) {
-      let newer = await isNewer(info.filename, info.output);
+      let outPath = Path.resolve(outputDirectory, info.output);
+      let newer = await isNewer(info.filename, outPath);
       if (!newer) {
         return;
       }

@@ -4,26 +4,18 @@
 #include <vector>
 
 import Scanner;
+import test.TokenStrings;
 
-std::ostream& operator<<(std::ostream& out, Token t) {
-  switch (t) {
-    case Token::end: return out << "end of file";
-    case Token::error: return out << "ERROR";
-    case Token::comment: return out << "COMMENT";
-    default: return out << static_cast<int>(t);
-  }
-}
+using std::string;
+using std::vector;
 
-template<typename T>
-void print_tokens(const T& tokens) {
-  for (auto t : tokens) {
-    std::cout << t << "\n";
-  }
-}
-
-void test(const std::string& input, const std::vector<Token>& expected) {
+void test(
+  const string& test_name,
+  const string& input,
+  const vector<Token>& expected
+) {
   Scanner scanner {input.begin(), input.end()};
-  std::vector<Token> actual;
+  vector<Token> actual;
   while (true) {
     Token t = scanner.next();
     actual.push_back(t);
@@ -32,14 +24,21 @@ void test(const std::string& input, const std::vector<Token>& expected) {
     }
   }
   if (!std::equal(actual.begin(), actual.end(), expected.begin())) {
-    std::cout << "Not equal" << "\n";
-    print_tokens(actual);
+    std::cerr
+      << "[" << test_name << "]\n"
+      << "Error: Token streams are not equal\n"
+      << "Input string: " << input << "\n"
+      << "Output tokens:\n";
+
+    for (auto t : actual) {
+      std::cerr << "- " << t << "\n";
+    }
     std::exit(1);
   }
 }
 
 int main() {
-  test("0xdeadBEAF012345678;", {
+  test("Hex numbers", "0xdeadBEAF012345678;", {
     Token::number,
     Token::semicolon,
     Token::end,
