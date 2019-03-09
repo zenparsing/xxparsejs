@@ -2,10 +2,10 @@ import * as FS from 'fs';
 import * as Path from 'path';
 import { fileURLToPath } from 'url';
 import { promisify } from 'util';
+import { spawnSync } from 'child_process';
 
-const dirname = Path.dirname(fileURLToPath(import.meta.url));
-const sourceDirectory = Path.resolve(dirname, '../src');
-const outputDirectory = Path.resolve(dirname, './_out');
+import { MsvsCompiler } from './msvs.js';
+
 const importPattern = /(?:^|\n)import ([^;\n\r]+)/g;
 
 const AFS = {
@@ -27,21 +27,50 @@ async function isNewer(first, second) {
   }
 }
 
-export async function compile(main, compiler) {
-  let target = 'x64';
+function getHostArch() {
+  for (let key of Object.keys(process.env)) {
+    if (key.startsWith('PROCESSOR_ARCH')) {
+      return process.env[key] === 'AMD64' ? 'x64' : 'x86';
+    }
+  }
+  throw new Error('Unable to determine host processor architecture');
+}
+
+function getCompiler(type) {
+  switch (type) {
+    case 'msvs': return new MsvsCompiler();
+    default: throw new Error(`Unsupported compiler "${ type }"`);
+  }
+}
+
+export async function compile(options) {
+  let compiler = getCompiler(options.compiler);
+  let host = getHostArch();
+  let {
+    target = host,
+    log = () => {},
+    run = false,
+    main,
+    outputDirectory,
+    resolveModule,
+  } = options;
 
   if (!await AFS.exists(outputDirectory)) {
     await AFS.mkdir(outputDirectory);
   }
 
-  await compiler.initialize({ outputDirectory, target });
+  await compiler.initialize({
+    outputDirectory,
+    host,
+    target,
+  });
 
-  console.log(`=> Compiling ${ target } -> ${ outputDirectory }`);
+  log(`Compiling ${ target } -> ${ outputDirectory }`);
 
   let compiled = new Set();
   let outputs = [];
 
-  await walk(main, async info => {
+  await walk(main, resolveModule, async info => {
     info.output = compiler.moduleOutputFile(info.name);
     outputs.unshift(info.output);
 
@@ -53,6 +82,7 @@ export async function compile(main, compiler) {
       }
     }
 
+    log(`${ info.name } -> ${ info.output }`);
     await compiler.compileModule(info);
 
     compiled.add(info.name);
@@ -62,10 +92,15 @@ export async function compile(main, compiler) {
     }
   });
 
-  console.log(`=> Linking`);
+  let linkOutput = compiler.linkOutputFile(main);
+  log(`Linking ${ target } -> ${ linkOutput }`);
+
+  // TODO: call link if link output file is missing
   if (compiled.size > 0) {
     await compiler.link({ outputs });
   }
+
+  return Path.resolve(outputDirectory, linkOutput);
 }
 
 async function getImportsFromFile(filename) {
@@ -77,16 +112,7 @@ async function getImportsFromFile(filename) {
   return imports;
 }
 
-async function resolveModule(name) {
-  let dir = sourceDirectory;
-  // Modules starting with "test." are in the test dir
-  if (name.startsWith('test.')) {
-    dir = Path.resolve(dirname, '../');
-  }
-  return Path.resolve(dir, name.replace('.', '/') + '.cpp');
-}
-
-export async function walk(name, callback, moduleMap = new Map()) {
+export async function walk(name, resolveModule, callback, moduleMap = new Map()) {
   let state = moduleMap.get(name);
 
   switch (state) {
@@ -100,7 +126,7 @@ export async function walk(name, callback, moduleMap = new Map()) {
   let imports = await getImportsFromFile(filename);
 
   for (let importName of imports) {
-    await walk(importName, callback, moduleMap);
+    await walk(importName, resolveModule, callback, moduleMap);
   }
 
   await callback({

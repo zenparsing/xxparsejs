@@ -3,18 +3,6 @@ import * as FS from 'fs';
 import { spawnSync, execSync } from 'child_process';
 import Buffer from 'buffer';
 
-import { compile } from './compile.js';
-
-// Gets the host architecture from environment variables
-function getHostArch() {
-  for (let key of Object.keys(process.env)) {
-    if (key.startsWith('PROCESSOR_ARCH')) {
-      return process.env[key] === 'AMD64' ? 'x64' : 'x86';
-    }
-  }
-  throw new Error('Unable to determine host processor architecture');
-}
-
 // Locates the MSVS script that initializes required environment variables
 function findEnvCmd() {
   let base = process.env['ProgramFiles(x86)'];
@@ -34,8 +22,7 @@ function findEnvCmd() {
 }
 
 // Returns an object containing MSVS environment variables
-function getEnvVars(outDir, target) {
-  let hostArch = getHostArch();
+function getEnvVars(outDir, hostArch, target) {
   let envSpec = target === hostArch ? target : `${ hostArch }_${ target }`;
 
   // Read variables from cached files if possible
@@ -47,12 +34,14 @@ function getEnvVars(outDir, target) {
   // Execute MSVS setup script and output all variables
   let cmd = findEnvCmd();
   let marker = '__MSVS_ENV_VARS__';
-  let result = execSync(`"${ cmd }" ${ envSpec } & echo ${ marker } & set`, { encoding: 'utf8' });
-  let vars = {};
+  let result = execSync(`"${ cmd }" ${ envSpec } & echo ${ marker } & set`, {
+    encoding: 'utf8',
+  });
 
   result = result.slice(result.indexOf(marker) + marker.length) + '\n';
 
   // Parse "set" output into object dictionary
+  let vars = {};
   let key = null;
   let start = 0;
   for (let i = 0; i < result.length; ++i) {
@@ -82,15 +71,23 @@ function getEnvVars(outDir, target) {
   return vars;
 }
 
-class Compiler {
+export class MsvsCompiler {
 
-  initialize({ outputDirectory, target }) {
+  initialize({ outputDirectory, host, target }) {
     this._out = outputDirectory;
-    this._env = getEnvVars(outputDirectory, target);
+    this._env = getEnvVars(outputDirectory, host, target);
   }
 
   moduleOutputFile(name) {
     return name + '.obj';
+  }
+
+  linkOutputFile(name) {
+    return name + '.exe';
+  }
+
+  hostArchitecture() {
+    return getHostArch();
   }
 
   compileModule({ filename, output }) {
@@ -117,7 +114,7 @@ class Compiler {
 
   _run(cmd, args) {
     let result = spawnSync(cmd, args, {
-      stdio: 'inherit',
+      stdio: 'pipe',
       cwd: this._out,
       env: this._env,
       encoding: 'utf8',
@@ -128,16 +125,11 @@ class Compiler {
     }
 
     if (result.status !== 0) {
+      console.log(`${ cmd } ${ args.join(' ') }`);
+      console.log('');
+      console.log(result.stdout);
       process.exit(result.status);
     }
   }
 
 }
-
-let main = process.argv[2];
-if (!main) {
-  console.log('No main module specified');
-  process.exit(1);
-}
-
-compile(main, new Compiler());
