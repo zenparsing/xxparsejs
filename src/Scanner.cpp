@@ -212,24 +212,16 @@ struct Scanner {
 
   Token _legacy_octal_number() {
     // TODO: record strict mode error
-    if (!_peek_range('0', '7')) {
-      return Token::error;
-    }
-    _advance();
-    while (true) {
-      if (_peek_range('0', '7')) {
-        _advance();
-      } else {
-        break;
-      }
-    }
-    _read_integer_suffix();
-    return _finish_number();
+    return _read_octal();
   }
 
   Token _octal_number() {
     // assert(_peek() == 'o')
     _advance();
+    return _read_octal();
+  }
+
+  Token _read_octal() {
     if (!_peek_range('0', '7')) {
       return Token::error;
     }

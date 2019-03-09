@@ -19,7 +19,7 @@ void test(
   while (true) {
     Token t = scanner.next();
     actual.push_back(t);
-    if (t == Token::end) {
+    if (t == Token::end || t == Token::error) {
       break;
     }
   }
@@ -37,10 +37,92 @@ void test(
   }
 }
 
-int main() {
-  test("Hex numbers", "0xdeadBEAF012345678;", {
+void test_hex_numbers() {
+  test("Hex numbers - basic", "0xdeadBEAF012345678;", {
     Token::number,
     Token::semicolon,
     Token::end,
   });
+
+  test("Hex numbers - digit required", "0x;", {
+    Token::error,
+  });
+
+  test("Hex numbers - invalid lookahead", "0x0q", {
+    Token::error
+  });
+}
+
+void test_binary_numbers() {
+  test("Binary numbers - basic", "0b01010;", {
+    Token::number,
+    Token::semicolon,
+    Token::end,
+  });
+
+  test("Binary numbers - digit required", "0b;", {
+    Token::error,
+  });
+
+  test("Binary numbers - invalid lookahead", "0b0f", {
+    Token::error
+  });
+}
+
+void test_octal_numbers() {
+  test("Octal numbers - basic", "0o077;", {
+    Token::number,
+    Token::semicolon,
+    Token::end,
+  });
+
+  test("Octal numbers - digit required", "0o;", {
+    Token::error,
+  });
+
+  test("Octal numbers - invalid lookahead", "0o077a", {
+    Token::error
+  });
+}
+
+void test_line_comments() {
+  test("Line comments - basic", ";// abc\n;", {
+    Token::semicolon,
+    Token::comment,
+    Token::semicolon,
+    Token::end,
+  });
+
+  test("Line comments - end of file", "//", {
+    Token::comment,
+    Token::end,
+  });
+}
+
+void test_block_comments() {
+  test("Block comments - basic", "; /* abc */ ;", {
+    Token::semicolon,
+    Token::comment,
+    Token::semicolon,
+    Token::end,
+  });
+
+  test("Block comments - no nesting", ";/* /* */;", {
+    Token::semicolon,
+    Token::comment,
+    Token::semicolon,
+    Token::end,
+  });
+
+  test("Block comments - end required", "/*", {
+    Token::error,
+  });
+}
+
+int main() {
+  test_hex_numbers();
+  test_octal_numbers();
+  test_binary_numbers();
+  test_line_comments();
+  test_block_comments();
 }
