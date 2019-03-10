@@ -194,6 +194,7 @@ struct Scanner {
     if (cp == '\r' && _peek() == '\n') {
       _advance();
     }
+    // TODO: record line break somewhere
     _span.newline_before = true;
     return Token::whitespace;
   }
@@ -312,8 +313,111 @@ struct Scanner {
     return Token::error;
   }
 
-  Token _string(uint32 cp) {
+  Token _string(uint32 delim) {
+    while (_can_shift()) {
+      if (auto n = _shift(); n == delim) {
+        return Token::string;
+      } else if (n == '\\') {
+        if (!_read_string_escape()) {
+          return Token::error;
+        }
+      } else if (n == '\r' || n == '\n') {
+        break;
+      }
+    }
+
     return Token::error;
+  }
+
+  bool _read_string_escape() {
+    if (!_can_shift()) {
+      return false;
+    }
+
+    switch (_shift()) {
+      case 't': return true; // \t
+      case 'b': return true; // \b
+      case 'v': return true; // \v
+      case 'f': return true; // \f
+      case 'r': return true; // \r
+      case 'n': return true; // \n
+
+      case '\r':
+        if (_peek() == '\n') {
+          _advance();
+        }
+        // TODO: record line break
+        return true;
+      case '\n':
+      case 0x2028:
+      case 0x2029:
+        // TODO: record line break
+        return true;
+
+      case '0':
+        if (!_peek_range('0', '9')) {
+          return true; // 0
+        }
+        // TODO: legacy octal escapes are not right
+        // Fallthrough
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+        while (true) {
+          if (_peek_range('0', '7')) {
+            _advance();
+          } else {
+            break;
+          }
+        }
+        // TODO: record strict mode error
+        return true;
+
+      case 'x': // \x00
+        return _read_unicode_hex(2, 2);
+
+      case 'u': // \u{00}, \u0000
+        if (_peek() == '{') {
+          _advance();
+          if (!_read_unicode_hex(1, 6)) {
+            return false;
+          }
+          if (_peek() != '}') {
+            return false;
+          }
+          _advance();
+          return true;
+        } else {
+          return _read_unicode_hex(4, 4);
+        }
+
+      default:
+        return true;
+
+    }
+  }
+
+  bool _read_unicode_hex(int min, int max) {
+    int count = 0;
+    uint32 val = 0;
+    while (count < max) {
+      if (auto n = _peek(); is_hex_digit(n)) {
+        _advance();
+        ++count;
+        val = val * 16 + (
+          n >= 'a' ? n - 'a' + 10 :
+          n >= 'A' ? n - 'A' + 10 :
+          n - '0'
+        );
+      } else {
+        break;
+      }
+    }
+    return count >= min && val <= 0x10ffff;
   }
 
   T _iter;

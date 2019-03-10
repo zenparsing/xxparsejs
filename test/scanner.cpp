@@ -119,10 +119,27 @@ void test_block_comments() {
   });
 }
 
+void test_strings() {
+  test("Strings - double quote", "\"hello\"", {
+    Token::string,
+    Token::end,
+  });
+
+  test("Strings - double quote", "'hello'", {
+    Token::string,
+    Token::end,
+  });
+
+  test("Strings - unicode escape out of range", "'\\u{110000}'", {
+    Token::error,
+  });
+}
+
 int main() {
   test_hex_numbers();
   test_octal_numbers();
   test_binary_numbers();
   test_line_comments();
   test_block_comments();
+  test_strings();
 }
