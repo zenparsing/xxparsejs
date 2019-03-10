@@ -1,3 +1,5 @@
+#include <optional>
+
 export module Scanner;
 
 import BasicTypes;
@@ -5,6 +7,8 @@ import Unicode;
 import Token;
 import TokenStartTable;
 import TokenTrie;
+
+using std::optional;
 
 export bool is_strict_reserved_word(Token t) {
   return
@@ -18,32 +22,6 @@ export bool is_contextual_keyword(Token t) {
     t < Token::kw_contextual_end;
 }
 
-// TODO: why does this have to be exported?
-export bool is_ascii_digit(uint32 cp) {
-  return cp >= '0' && cp <= '9';
-}
-
-// TODO: why does this have to be exported?
-export bool is_hex_digit(uint32 cp) {
-  return
-    cp >= '0' && cp <= '9' ||
-    cp >= 'a' && cp <= 'f' ||
-    cp >= 'A' && cp <= 'F';
-}
-
-// TODO: why does this have to be exported?
-export bool is_newline_char(uint32 cp, bool ascii_only = false) {
-  if (cp == '\n' || cp == '\r') {
-    return true;
-  }
-
-  if (ascii_only) {
-    return false;
-  }
-
-  return cp == 0x2028 || cp == 0x2029;
-}
-
 export Token;
 
 export using SourcePosition = uint32;
@@ -53,6 +31,7 @@ export struct TokenSpan {
   SourcePosition start {0};
   SourcePosition end {0};
   bool newline_before {false};
+  double number_value {0};
 };
 
 export template<typename T>
@@ -62,6 +41,11 @@ struct Scanner {
     expression,
     template_string,
     div,
+  };
+
+  enum class Error {
+    invalid_hex_escape,
+    invalid_unicode_escape,
   };
 
   Scanner(T& begin, T& end) : _iter {begin}, _end {end} {}
@@ -241,11 +225,11 @@ struct Scanner {
   Token _hex_number() {
     // assert(_peek() == 'x')
     _advance();
-    if (!is_hex_digit(_peek())) {
+    if (!hex_char_value(_peek())) {
       return Token::error;
     }
     _advance();
-    while (is_hex_digit(_peek())) {
+    while (hex_char_value(_peek())) {
       _advance();
     }
     _read_integer_suffix();
@@ -318,7 +302,7 @@ struct Scanner {
       if (auto n = _shift(); n == delim) {
         return Token::string;
       } else if (n == '\\') {
-        if (!_read_string_escape()) {
+        if (!_read_string_escape(true)) {
           return Token::error;
         }
       } else if (n == '\r' || n == '\n') {
@@ -329,61 +313,60 @@ struct Scanner {
     return Token::error;
   }
 
-  bool _read_string_escape() {
+  bool _read_string_escape(bool allow_legacy_octal = false) {
+    // TODO: record line breaks
+
     if (!_can_shift()) {
       return false;
     }
 
-    switch (_shift()) {
-      case 't': return true; // \t
-      case 'b': return true; // \b
-      case 'v': return true; // \v
-      case 'f': return true; // \f
-      case 'r': return true; // \r
-      case 'n': return true; // \n
+    uint32 cp = _shift();
+
+    switch (cp) {
+      case 't': return true; // '\t';
+      case 'b': return true; // '\b';
+      case 'v': return true; // '\v';
+      case 'f': return true; // '\f';
+      case 'r': return true; // '\r';
+      case 'n': return true; // '\r';
 
       case '\r':
         if (_peek() == '\n') {
           _advance();
         }
-        // TODO: record line break
         return true;
+
       case '\n':
       case 0x2028:
       case 0x2029:
-        // TODO: record line break
         return true;
 
       case '0':
-        if (!_peek_range('0', '9')) {
-          return true; // 0
+        if (_peek_range('0', '7')) {
+          _string_escape_octal(cp, 2);
         }
-        // TODO: legacy octal escapes are not right
-        // Fallthrough
+        return true;
+
       case '1':
       case '2':
       case '3':
+        _string_escape_octal(cp, 2);
+        return true;
+
       case '4':
       case '5':
       case '6':
       case '7':
-        while (true) {
-          if (_peek_range('0', '7')) {
-            _advance();
-          } else {
-            break;
-          }
-        }
-        // TODO: record strict mode error
+        _string_escape_octal(cp, 1);
         return true;
 
-      case 'x': // \x00
-        return _read_unicode_hex(2, 2);
+      case 'x':
+        return _string_escape_hex(2) ? true : false;
 
-      case 'u': // \u{00}, \u0000
+      case 'u':
         if (_peek() == '{') {
           _advance();
-          if (!_read_unicode_hex(1, 6)) {
+          if (!_string_escape_hex(1, 6)) {
             return false;
           }
           if (_peek() != '}') {
@@ -392,7 +375,7 @@ struct Scanner {
           _advance();
           return true;
         } else {
-          return _read_unicode_hex(4, 4);
+          return _string_escape_hex(4) ? true : false;
         }
 
       default:
@@ -401,23 +384,69 @@ struct Scanner {
     }
   }
 
-  bool _read_unicode_hex(int min, int max) {
-    int count = 0;
-    uint32 val = 0;
-    while (count < max) {
-      if (auto n = _peek(); is_hex_digit(n)) {
+  uint32 _string_escape_octal(uint32 first, int max) {
+    // TODO: record strict mode error
+    // assert(first >= '0' && first <= '7')
+    uint32 val = first - '0';
+    for (int count = 0; count < max; ++count) {
+      if (auto n = _peek(); n >= '0' && n <= '7') {
         _advance();
-        ++count;
-        val = val * 16 + (
-          n >= 'a' ? n - 'a' + 10 :
-          n >= 'A' ? n - 'A' + 10 :
-          n - '0'
-        );
+        val = val * 8 + n - '0';
       } else {
         break;
       }
     }
-    return count >= min && val <= 0x10ffff;
+    return val;
+  }
+
+  auto _string_escape_hex(int length) {
+    return _string_escape_hex(length, length);
+  }
+
+  optional<uint32> _string_escape_hex(int min, int max) {
+    uint32 val = 0;
+    int count = 0;
+    for (; count < max; ++count) {
+      if (auto v = hex_char_value(_peek())) {
+        _advance();
+        val = val * 16 + *v;
+      } else {
+        break;
+      }
+    }
+    if (count >= min && val <= 0x10ffff) {
+      return val;
+    }
+    return {};
+  }
+
+  static bool is_ascii_digit(uint32 cp) {
+    return cp >= '0' && cp <= '9';
+  }
+
+  static optional<uint32> hex_char_value(uint32 cp) {
+    if (cp >= '0' && cp <= '9') {
+      return cp - 0;
+    }
+    if (cp >= 'A' && cp <= 'F') {
+      return cp - 'A';
+    }
+    if (cp >= 'a' && cp <= 'f') {
+      return cp - 'a';
+    }
+    return {};
+  }
+
+  static bool is_newline_char(uint32 cp, bool ascii_only = false) {
+    if (cp == '\n' || cp == '\r') {
+      return true;
+    }
+
+    if (ascii_only) {
+      return false;
+    }
+
+    return cp == 0x2028 || cp == 0x2029;
   }
 
   T _iter;

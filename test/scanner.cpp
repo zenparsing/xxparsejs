@@ -130,8 +130,36 @@ void test_strings() {
     Token::end,
   });
 
+  test("Strings - unicode escape 1", "'\\uABCD'", {
+    Token::string,
+    Token::end,
+  });
+
+  test("Strings - unicode escape 2", "'\\u{ABCD}'", {
+    Token::string,
+    Token::end,
+  });
+
   test("Strings - unicode escape out of range", "'\\u{110000}'", {
     Token::error,
+  });
+
+  test("Strings - hex escape", "'\\x00BE'", {
+    Token::string,
+    Token::end,
+  });
+
+  test("Strings - invalid hex escape 1", "'\\xZ", {
+    Token::error,
+  });
+
+  test("Strings - invalid hex escape 1", "'\\xAZ", {
+    Token::error,
+  });
+
+  test("Strings - legacy octal escapes", "'\\012'", {
+    Token::string,
+    Token::end,
   });
 }
 

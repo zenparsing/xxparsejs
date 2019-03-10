@@ -104,7 +104,7 @@ export class MsvsCompiler {
 
   _cl(...args) {
     this._run('cl', [
-      '/std:c++latest',
+      '/std:c++17',
       '/EHsc',
       '/nologo',
       '/experimental:module',
