@@ -219,7 +219,48 @@ struct Scanner {
   }
 
   Token _number(uint32 cp) {
-    return Token::error;
+    if (cp == '.') {
+      _decimal_integer();
+    } else {
+      _decimal_integer(cp);
+      if (_peek() == '.') {
+        _advance();
+        _decimal_integer();
+      }
+    }
+
+    if (auto n = _peek(); n == 'e' || n == 'E') {
+      _advance();
+      bool neg = false;
+      if (auto n = _peek(); n == '-') {
+        _advance();
+        neg = true;
+      } else if (n == '+') {
+        _advance();
+      }
+      if (!_peek_range('0', '9')) {
+        return Token::error;
+      }
+      _decimal_integer();
+    }
+
+    return Token::number;
+  }
+
+  double _decimal_integer() {
+    if (_peek_range('0', '9')) {
+      return _decimal_integer(_shift());
+    }
+    return 0;
+  }
+
+  double _decimal_integer(uint32 cp) {
+    // assert(cp >= '0' && cp <= '9')
+    double val = cp - '0';
+    while (_peek_range('0', '9')) {
+      val = val * 10 + _shift() - '0';
+    }
+    return val;
   }
 
   Token _legacy_octal_number() {

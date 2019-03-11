@@ -37,137 +37,176 @@ void test(
   }
 }
 
-void test_hex_numbers() {
-  test("Hex numbers - basic", "0xdeadBEAF012345678;", {
+void test_number() {
+  test("Number - integer", "01234", {
+    Token::number,
+    Token::end,
+  });
+
+  test("Number - with decimal point", "234.45", {
+    Token::number,
+    Token::end,
+  });
+
+  test("Number - with exponent", "234.45e12", {
+    Token::number,
+    Token::end,
+  });
+
+  test("Number - with exponent sign +", "234e+12", {
+    Token::number,
+    Token::end,
+  });
+
+  test("Number - with exponent sign -", "234e-12", {
+    Token::number,
+    Token::end,
+  });
+
+  test("Number - leading decimal point", ".234", {
+    Token::number,
+    Token::end,
+  });
+
+  test("Number - trailing decimal point", "234.;", {
+    Token::number,
+    Token::semicolon,
+    Token::end,
+  });
+}
+
+void test_hex_number() {
+  test("Hex number - basic", "0xdeadBEAF012345678;", {
     Token::number,
     Token::semicolon,
     Token::end,
   });
 
-  test("Hex numbers - digit required", "0x;", {
+  test("Hex number - digit required", "0x;", {
     Token::error,
   });
 
-  test("Hex numbers - invalid lookahead", "0x0q", {
+  test("Hex number - invalid lookahead", "0x0q", {
     Token::error
   });
 }
 
-void test_binary_numbers() {
-  test("Binary numbers - basic", "0b01010;", {
+void test_binary_number() {
+  test("Binary number - basic", "0b01010;", {
     Token::number,
     Token::semicolon,
     Token::end,
   });
 
-  test("Binary numbers - digit required", "0b;", {
+  test("Binary number - digit required", "0b;", {
     Token::error,
   });
 
-  test("Binary numbers - invalid lookahead", "0b0f", {
+  test("Binary number - invalid lookahead", "0b0f", {
     Token::error
   });
 }
 
-void test_octal_numbers() {
-  test("Octal numbers - basic", "0o077;", {
+void test_octal_number() {
+  test("Octal number - basic", "0o077;", {
     Token::number,
     Token::semicolon,
     Token::end,
   });
 
-  test("Octal numbers - digit required", "0o;", {
+  test("Octal number - digit required", "0o;", {
     Token::error,
   });
 
-  test("Octal numbers - invalid lookahead", "0o077a", {
+  test("Octal number - invalid lookahead", "0o077a", {
     Token::error
   });
 }
 
-void test_line_comments() {
-  test("Line comments - basic", ";// abc\n;", {
+void test_line_comment() {
+  test("Line comment - basic", ";// abc\n;", {
     Token::semicolon,
     Token::comment,
     Token::semicolon,
     Token::end,
   });
 
-  test("Line comments - end of file", "//", {
+  test("Line comment - end of file", "//", {
     Token::comment,
     Token::end,
   });
 }
 
-void test_block_comments() {
-  test("Block comments - basic", "; /* abc */ ;", {
+void test_block_comment() {
+  test("Block comment - basic", "; /* abc */ ;", {
     Token::semicolon,
     Token::comment,
     Token::semicolon,
     Token::end,
   });
 
-  test("Block comments - no nesting", ";/* /* */;", {
+  test("Block comment - no nesting", ";/* /* */;", {
     Token::semicolon,
     Token::comment,
     Token::semicolon,
     Token::end,
   });
 
-  test("Block comments - end required", "/*", {
+  test("Block comment - end required", "/*", {
     Token::error,
   });
 }
 
-void test_strings() {
-  test("Strings - double quote", "\"hello\"", {
+void test_string() {
+  test("String - double quote", "\"hello\"", {
     Token::string,
     Token::end,
   });
 
-  test("Strings - double quote", "'hello'", {
+  test("String - double quote", "'hello'", {
     Token::string,
     Token::end,
   });
 
-  test("Strings - unicode escape 1", "'\\uABCD'", {
+  test("String - unicode escape 1", "'\\uABCD'", {
     Token::string,
     Token::end,
   });
 
-  test("Strings - unicode escape 2", "'\\u{ABCD}'", {
+  test("String - unicode escape 2", "'\\u{ABCD}'", {
     Token::string,
     Token::end,
   });
 
-  test("Strings - unicode escape out of range", "'\\u{110000}'", {
+  test("String - unicode escape out of range", "'\\u{110000}'", {
     Token::error,
   });
 
-  test("Strings - hex escape", "'\\x00BE'", {
+  test("String - hex escape", "'\\x00BE'", {
     Token::string,
     Token::end,
   });
 
-  test("Strings - invalid hex escape 1", "'\\xZ", {
+  test("String - invalid hex escape 1", "'\\xZ", {
     Token::error,
   });
 
-  test("Strings - invalid hex escape 1", "'\\xAZ", {
+  test("String - invalid hex escape 1", "'\\xAZ", {
     Token::error,
   });
 
-  test("Strings - legacy octal escapes", "'\\012'", {
+  test("String - legacy octal escapes", "'\\012'", {
     Token::string,
     Token::end,
   });
 }
 
 int main() {
-  test_hex_numbers();
-  test_octal_numbers();
-  test_binary_numbers();
-  test_line_comments();
-  test_block_comments();
-  test_strings();
+  test_number();
+  test_hex_number();
+  test_octal_number();
+  test_binary_number();
+  test_line_comment();
+  test_block_comment();
+  test_string();
 }
