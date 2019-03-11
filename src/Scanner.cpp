@@ -26,14 +26,6 @@ export Token;
 
 export using SourcePosition = uint32;
 
-export struct TokenSpan {
-  Token token {Token::error};
-  SourcePosition start {0};
-  SourcePosition end {0};
-  bool newline_before {false};
-  double number_value {0};
-};
-
 export template<typename T>
 struct Scanner {
 
@@ -44,24 +36,42 @@ struct Scanner {
   };
 
   enum class Error {
+    none,
     invalid_hex_escape,
     invalid_unicode_escape,
+    unterminated_string,
+    unterminated_comment,
+    unterminated_template,
+    invalid_number_literal,
+  };
+
+  struct Result {
+    Token token {Token::error};
+    SourcePosition start {0};
+    SourcePosition end {0};
+    bool newline_before {false};
+    double number_value {0};
+    Error error {Error::none};
   };
 
   Scanner(T& begin, T& end) : _iter {begin}, _end {end} {}
 
   Token next(Context context = Context::expression) {
-    if (_span.token != Token::comment) {
-      _span.newline_before = false;
+    if (_result.token != Token::comment) {
+      _result.newline_before = false;
     }
 
-    _span.start = _position;
+    _result.start = _position;
+    _result.error = Error::none;
 
     while (true) {
-      _span.token = _start(context);
-      if (_span.token != Token::whitespace) {
-        _span.end = _position;
-        return _span.token;
+      _result.token = _start(context);
+      if (_result.error != Error::none) {
+        _result.token = Token::error;
+      }
+      if (_result.token != Token::whitespace) {
+        _result.end = _position;
+        return _result.token;
       }
     }
   }
@@ -90,6 +100,10 @@ struct Scanner {
 
   bool _can_shift() {
     return _iter != _end;
+  }
+
+  void _set_error(Error error) {
+    _result.error = error;
   }
 
   Token _start(Context context) {
@@ -171,6 +185,20 @@ struct Scanner {
   }
 
   Token _template(uint32 cp) {
+    while (_can_shift()) {
+      if (auto n = _shift(); n == '`') {
+        return cp == '`'
+          ? Token::template_basic
+          : Token::template_end;
+      } else if (n == '$' && _peek() == '{') {
+        _advance();
+        return cp == '`'
+          ? Token::template_start
+          : Token::template_middle;
+      } else if (n == '\\') {
+        _string_escape(false);
+      }
+    }
     return Token::error;
   }
 
@@ -178,8 +206,7 @@ struct Scanner {
     if (cp == '\r' && _peek() == '\n') {
       _advance();
     }
-    // TODO: record line break somewhere
-    _span.newline_before = true;
+    _result.newline_before = true;
     return Token::whitespace;
   }
 
@@ -207,6 +234,7 @@ struct Scanner {
   }
 
   Token _read_octal() {
+    // TODO: store double value
     if (!_peek_range('0', '7')) {
       return Token::error;
     }
@@ -218,11 +246,12 @@ struct Scanner {
         break;
       }
     }
-    _read_integer_suffix();
-    return _finish_number();
+    _number_suffix();
+    return Token::number;
   }
 
   Token _hex_number() {
+    // TODO: store number value
     // assert(_peek() == 'x')
     _advance();
     if (!hex_char_value(_peek())) {
@@ -232,11 +261,12 @@ struct Scanner {
     while (hex_char_value(_peek())) {
       _advance();
     }
-    _read_integer_suffix();
-    return _finish_number();
+    _number_suffix();
+    return Token::number;
   }
 
   Token _binary_number() {
+    // TODO: store number value
     // assert(_peek() == 'b')
     _advance();
     if (!_peek_range('0', '1')) {
@@ -250,26 +280,18 @@ struct Scanner {
         break;
       }
     }
-    _read_integer_suffix();
-    return _finish_number();
+    _number_suffix();
+    return Token::number;
   }
 
-  void _read_integer_suffix() {
-    if (_peek() == 'n') {
-      // TODO: record this info in span
-      _advance();
-    }
-  }
-
-  Token _finish_number() {
+  void _number_suffix() {
     if (auto n = _peek(); n < 128) {
       if (token_start_table[n] == TokenStartType::identifier) {
-        return Token::error;
+        _set_error(Error::invalid_number_literal);
       }
     } else if (is_identifier_start(n)) {
-      return Token::error;
+      _set_error(Error::invalid_number_literal);
     }
-    return Token::number;
   }
 
   Token _regexp() {
@@ -288,13 +310,22 @@ struct Scanner {
   Token _block_comment() {
     // assert(_peek() == '*')
     _advance();
-    while (_can_shift()) {
-      if (_shift() == '*' && _peek() == '/') {
+    while (true) {
+      if (!_can_shift()) {
+        _set_error(Error::unterminated_comment);
+        break;
+      }
+      if (auto cp = _shift(); is_newline_char(cp)) {
+        if (cp == '\r' && _peek() == '\n') {
+          _advance();
+        }
+        _result.newline_before = true;
+      } else if (cp == '*' && _peek() == '/') {
         _advance();
-        return Token::comment;
+        break;
       }
     }
-    return Token::error;
+    return Token::comment;
   }
 
   Token _string(uint32 delim) {
@@ -302,84 +333,85 @@ struct Scanner {
       if (auto n = _shift(); n == delim) {
         return Token::string;
       } else if (n == '\\') {
-        if (!_read_string_escape(true)) {
-          return Token::error;
-        }
+        _string_escape(true);
       } else if (n == '\r' || n == '\n') {
         break;
       }
     }
-
-    return Token::error;
+    _set_error(Error::unterminated_string);
+    return Token::string;
   }
 
-  bool _read_string_escape(bool allow_legacy_octal = false) {
-    // TODO: record line breaks
-
+  optional<uint32> _string_escape(bool allow_legacy_octal = false) {
     if (!_can_shift()) {
-      return false;
+      _set_error(Error::unterminated_string);
+      return {};
     }
 
     uint32 cp = _shift();
 
     switch (cp) {
-      case 't': return true; // '\t';
-      case 'b': return true; // '\b';
-      case 'v': return true; // '\v';
-      case 'f': return true; // '\f';
-      case 'r': return true; // '\r';
-      case 'n': return true; // '\r';
+      case 't': return '\t';
+      case 'b': return '\b';
+      case 'v': return '\v';
+      case 'f': return '\f';
+      case 'r': return '\r';
+      case 'n': return '\n';
 
       case '\r':
         if (_peek() == '\n') {
           _advance();
         }
-        return true;
+        return {};
 
       case '\n':
       case 0x2028:
       case 0x2029:
-        return true;
+        return {};
 
       case '0':
         if (_peek_range('0', '7')) {
-          _string_escape_octal(cp, 2);
+          return _string_escape_octal(cp, 2);
         }
-        return true;
+        return {0};
 
       case '1':
       case '2':
       case '3':
-        _string_escape_octal(cp, 2);
-        return true;
+        return _string_escape_octal(cp, 2);
 
       case '4':
       case '5':
       case '6':
       case '7':
-        _string_escape_octal(cp, 1);
-        return true;
+        return _string_escape_octal(cp, 1);
 
       case 'x':
-        return _string_escape_hex(2) ? true : false;
+        if (auto v = _string_escape_hex(2)) {
+          return v;
+        }
+        _set_error(Error::invalid_hex_escape);
+        return {};
 
       case 'u':
         if (_peek() == '{') {
           _advance();
-          if (!_string_escape_hex(1, 6)) {
-            return false;
+          if (auto v = _string_escape_hex(1, 6)) {
+            if (_peek() == '}') {
+              _advance();
+              return v;
+            }
           }
-          if (_peek() != '}') {
-            return false;
-          }
-          _advance();
-          return true;
         } else {
-          return _string_escape_hex(4) ? true : false;
+          if (auto v = _string_escape_hex(4)) {
+            return v;
+          }
         }
+        _set_error(Error::invalid_unicode_escape);
+        return {};
 
       default:
-        return true;
+        return cp;
 
     }
   }
@@ -452,6 +484,6 @@ struct Scanner {
   T _iter;
   T _end;
   SourcePosition _position {0};
-  TokenSpan _span;
+  Result _result;
 
 };
