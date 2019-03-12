@@ -41,6 +41,14 @@ export bool is_whitespace(uint32 code) {
 }
 
 export bool is_identifier_start(uint32 code) {
+  if (code < 128) {
+    return
+      code >= 'a' && code <= 'z' ||
+      code >= 'A' && code <= 'Z' ||
+      code >= '0' && code <= '9' ||
+      code == '_' ||
+      code == '$';
+  }
   auto* span = search_table<IdentifierData>(code);
   return span != nullptr && span->start;
 }

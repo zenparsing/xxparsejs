@@ -201,6 +201,18 @@ void test_string() {
   });
 }
 
+void test_identifier() {
+  test("Identifier - max munch", "iffy", {
+    Token::identifier,
+    Token::end,
+  });
+
+  test("Identifier - unicode escape", "a\\u{62}c", {
+    Token::identifier,
+    Token::end,
+  });
+}
+
 int main() {
   test_number();
   test_hex_number();
@@ -209,4 +221,5 @@ int main() {
   test_line_comment();
   test_block_comment();
   test_string();
+  test_identifier();
 }

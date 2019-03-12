@@ -129,7 +129,7 @@ struct Scanner {
           return _identifier(cp);
 
         case TokenStartType::dot:
-          return is_ascii_digit(_peek())
+          return _peek_range('0', '9')
             ? _number(cp)
             : _punctuator(cp);
 
@@ -212,8 +212,23 @@ struct Scanner {
 
   Token _identifier(uint32 cp) {
     Token t = TokenTrie<Scanner>::match_keyword(*this, cp);
-    if (t == Token::error) {
-
+    while (true) {
+      if (auto n = _peek(); is_identifier_part(n)) {
+        t = Token::identifier;
+        _advance();
+      } else if (n == '\\') {
+        t = Token::identifier;
+        _advance();
+        if (_peek() != 'u') {
+          return Token::error;
+        }
+        _advance();
+        if (!_unicode_escape_sequence()) {
+          return Token::error;
+        }
+      } else {
+        break;
+      }
     }
     return t;
   }
@@ -275,7 +290,6 @@ struct Scanner {
   }
 
   Token _read_octal() {
-    // TODO: store double value
     if (!_peek_range('0', '7')) {
       return Token::error;
     }
@@ -292,7 +306,6 @@ struct Scanner {
   }
 
   Token _hex_number() {
-    // TODO: store number value
     // assert(_peek() == 'x')
     _advance();
     if (!hex_char_value(_peek())) {
@@ -307,7 +320,6 @@ struct Scanner {
   }
 
   Token _binary_number() {
-    // TODO: store number value
     // assert(_peek() == 'b')
     _advance();
     if (!_peek_range('0', '1')) {
@@ -435,26 +447,30 @@ struct Scanner {
         return {};
 
       case 'u':
-        if (_peek() == '{') {
-          _advance();
-          if (auto v = _string_escape_hex(1, 6)) {
-            if (_peek() == '}') {
-              _advance();
-              return v;
-            }
-          }
-        } else {
-          if (auto v = _string_escape_hex(4)) {
-            return v;
-          }
-        }
-        _set_error(Error::invalid_unicode_escape);
-        return {};
+        return _unicode_escape_sequence();
 
       default:
         return cp;
 
     }
+  }
+
+  optional<uint32> _unicode_escape_sequence() {
+    if (_peek() == '{') {
+      _advance();
+      if (auto v = _string_escape_hex(1, 6)) {
+        if (_peek() == '}') {
+          _advance();
+          return v;
+        }
+      }
+    } else {
+      if (auto v = _string_escape_hex(4)) {
+        return v;
+      }
+    }
+    _set_error(Error::invalid_unicode_escape);
+    return {};
   }
 
   uint32 _string_escape_octal(uint32 first, int max) {
@@ -491,10 +507,6 @@ struct Scanner {
       return val;
     }
     return {};
-  }
-
-  static bool is_ascii_digit(uint32 cp) {
-    return cp >= '0' && cp <= '9';
   }
 
   static optional<uint32> hex_char_value(uint32 cp) {
