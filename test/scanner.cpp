@@ -202,13 +202,15 @@ void test_string() {
 }
 
 void test_identifier() {
-  test("Identifier - max munch", "iffy", {
+  test("Identifier - max munch", "iffy;", {
     Token::identifier,
+    Token::semicolon,
     Token::end,
   });
 
-  test("Identifier - unicode escape", "a\\u{62}c", {
+  test("Identifier - unicode escape", "a\\u{62}c;", {
     Token::identifier,
+    Token::semicolon,
     Token::end,
   });
 }

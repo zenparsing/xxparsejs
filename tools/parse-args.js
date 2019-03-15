@@ -1,5 +1,3 @@
-const flags = new Set(['--script', '--cjs']);
-
 export function parseArgs(options = {}) {
   let {
     argv = process.argv.slice(2),

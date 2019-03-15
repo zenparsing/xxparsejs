@@ -1,4 +1,5 @@
 #include <optional>
+#include <cassert>
 
 export module Scanner;
 
@@ -77,14 +78,14 @@ struct Scanner {
   }
 
   uint32 _shift() {
-    // assert(_iter != _end)
+    assert(_iter != _end);
     uint32 cp = *_iter;
     _advance();
     return cp;
   }
 
   void _advance() {
-    // assert(_iter != _end)
+    assert(_iter != _end);
     ++_position;
     ++_iter;
   }
@@ -270,7 +271,7 @@ struct Scanner {
   }
 
   double _decimal_integer(uint32 cp) {
-    // assert(cp >= '0' && cp <= '9')
+    assert(cp >= '0' && cp <= '9');
     double val = cp - '0';
     while (_peek_range('0', '9')) {
       val = val * 10 + _shift() - '0';
@@ -284,7 +285,7 @@ struct Scanner {
   }
 
   Token _octal_number() {
-    // assert(_peek() == 'o')
+    assert(_peek() == 'o');
     _advance();
     return _read_octal();
   }
@@ -306,7 +307,7 @@ struct Scanner {
   }
 
   Token _hex_number() {
-    // assert(_peek() == 'x')
+    assert(_peek() == 'x');
     _advance();
     if (!hex_char_value(_peek())) {
       return Token::error;
@@ -320,7 +321,7 @@ struct Scanner {
   }
 
   Token _binary_number() {
-    // assert(_peek() == 'b')
+    assert(_peek() == 'b');
     _advance();
     if (!_peek_range('0', '1')) {
       return Token::error;
@@ -352,7 +353,7 @@ struct Scanner {
   }
 
   Token _line_comment() {
-    // assert(_peek() == '/')
+    assert(_peek() == '/');
     _advance();
     while (_can_shift() && !is_newline_char(_peek())) {
       _advance();
@@ -361,7 +362,7 @@ struct Scanner {
   }
 
   Token _block_comment() {
-    // assert(_peek() == '*')
+    assert(_peek() == '*');
     _advance();
     while (true) {
       if (!_can_shift()) {
@@ -475,7 +476,7 @@ struct Scanner {
 
   uint32 _string_escape_octal(uint32 first, int max) {
     // TODO: record strict mode error
-    // assert(first >= '0' && first <= '7')
+    assert(first >= '0' && first <= '7');
     uint32 val = first - '0';
     for (int count = 0; count < max; ++count) {
       if (auto n = _peek(); n >= '0' && n <= '7') {
