@@ -43,6 +43,7 @@ struct Scanner {
     unterminated_string,
     unterminated_comment,
     unterminated_template,
+    unterminated_regexp,
     invalid_number_literal,
     legacy_octal_escape,
     legacy_octal_number,
@@ -357,7 +358,30 @@ struct Scanner {
   }
 
   Token _regexp() {
-    return Token::error;
+    bool backslash = false;
+    bool in_class = false;
+
+    while (_can_shift()) {
+      if (auto n = _shift(); is_newline_char(n)) {
+        break;
+      } else if (backslash) {
+        backslash = false;
+      } else if (n == '[') {
+        in_class = true;
+      } else if (n == ']' && in_class) {
+        in_class = false;
+      } else if (n == '\\') {
+        backslash = true;
+      } else if (n == '/' && !in_class) {
+        while (is_identifier_part(_peek())) {
+          _advance();
+        }
+        return Token::regexp;
+      }
+    }
+
+    _set_error(Error::unterminated_regexp);
+    return Token::regexp;
   }
 
   Token _line_comment() {
@@ -401,7 +425,7 @@ struct Scanner {
       }
     }
     _set_error(Error::unterminated_string);
-    return Token::string;
+    return Token::error;
   }
 
   optional<uint32> _string_escape(bool allow_legacy_octal = false) {

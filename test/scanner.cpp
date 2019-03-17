@@ -87,7 +87,11 @@ void test_hex_number() {
   });
 
   test("Hex number - invalid lookahead", "0x0q", {
-    Token::error
+    Token::error,
+  });
+
+  test("Hex number - invalid hex digit", "0xzzz", {
+    Token::error,
   });
 }
 
@@ -215,6 +219,13 @@ void test_identifier() {
   });
 }
 
+void test_regexp() {
+  test("Regexp - basic", "/zenpar\\sing[0-9]/ig", {
+    Token::regexp,
+    Token::end,
+  });
+}
+
 int main() {
   test_number();
   test_hex_number();
@@ -224,4 +235,5 @@ int main() {
   test_block_comment();
   test_string();
   test_identifier();
+  test_regexp();
 }

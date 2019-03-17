@@ -45,7 +45,6 @@ export bool is_identifier_start(uint32 code) {
     return
       code >= 'a' && code <= 'z' ||
       code >= 'A' && code <= 'Z' ||
-      code >= '0' && code <= '9' ||
       code == '_' ||
       code == '$';
   }
@@ -54,5 +53,13 @@ export bool is_identifier_start(uint32 code) {
 }
 
 export bool is_identifier_part(uint32 code) {
+  if (code < 128) {
+    return
+      code >= 'a' && code <= 'z' ||
+      code >= 'A' && code <= 'Z' ||
+      code >= '0' && code <= '9' ||
+      code == '_' ||
+      code == '$';
+  }
   return search_table<IdentifierData>(code) != nullptr;
 }
