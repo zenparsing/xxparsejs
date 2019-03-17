@@ -38,7 +38,7 @@ void test(
 }
 
 void test_number() {
-  test("Number - integer", "01234", {
+  test("Number - integer", "1234", {
     Token::number,
     Token::end,
   });

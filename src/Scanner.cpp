@@ -44,6 +44,8 @@ struct Scanner {
     unterminated_comment,
     unterminated_template,
     invalid_number_literal,
+    legacy_octal_escape,
+    legacy_octal_number,
   };
 
   struct Result {
@@ -53,6 +55,7 @@ struct Scanner {
     bool newline_before {false};
     double number_value {0};
     Error error {Error::none};
+    Error strict_error {Error::none};
   };
 
   Scanner(T& begin, T& end) : _iter {begin}, _end {end} {}
@@ -64,6 +67,7 @@ struct Scanner {
 
     _result.start = _position;
     _result.error = Error::none;
+    _result.strict_error = Error::none;
 
     while (true) {
       _result.token = _start(context);
@@ -105,6 +109,10 @@ struct Scanner {
 
   void _set_error(Error error) {
     _result.error = error;
+  }
+
+  void _set_strict_error(Error error) {
+    _result.strict_error = error;
   }
 
   Token _start(Context context) {
@@ -254,20 +262,20 @@ struct Scanner {
       } else if (n == '+') {
         _advance();
       }
-      if (!_peek_range('0', '9')) {
+      if (_peek_range('0', '9')) {
+        _decimal_integer(_shift());
+      } else {
         return Token::error;
       }
-      _decimal_integer();
     }
 
     return Token::number;
   }
 
   double _decimal_integer() {
-    if (_peek_range('0', '9')) {
-      return _decimal_integer(_shift());
-    }
-    return 0;
+    return _peek_range('0', '9')
+      ? _decimal_integer(_shift())
+      : 0;
   }
 
   double _decimal_integer(uint32 cp) {
@@ -280,17 +288,17 @@ struct Scanner {
   }
 
   Token _legacy_octal_number() {
-    // TODO: record strict mode error
-    return _read_octal();
+    _set_strict_error(Error::legacy_octal_number);
+    return _octal_integer();
   }
 
   Token _octal_number() {
     assert(_peek() == 'o');
     _advance();
-    return _read_octal();
+    return _octal_integer();
   }
 
-  Token _read_octal() {
+  Token _octal_integer() {
     if (!_peek_range('0', '7')) {
       return Token::error;
     }
@@ -475,8 +483,8 @@ struct Scanner {
   }
 
   uint32 _string_escape_octal(uint32 first, int max) {
-    // TODO: record strict mode error
     assert(first >= '0' && first <= '7');
+    _set_strict_error(Error::legacy_octal_escape);
     uint32 val = first - '0';
     for (int count = 0; count < max; ++count) {
       if (auto n = _peek(); n >= '0' && n <= '7') {
