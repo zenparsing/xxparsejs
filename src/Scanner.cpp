@@ -60,7 +60,6 @@ struct Scanner {
     SourcePosition start {0};
     SourcePosition end {0};
     bool newline_before {false};
-    double number_value {0};
     Error error {Error::none};
     Error strict_error {Error::none};
   };

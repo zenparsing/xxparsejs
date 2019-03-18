@@ -77,11 +77,6 @@ function trieToCode(t, depth = 0) {
   return out;
 }
 
-let tok = matchAll(typesFile, /[ \t]+kw_(\w+)/g)
-  .map(m => m[1])
-  .filter(k => !k.endsWith('_begin') && !k.endsWith('_end'))
-  .map(k => [k, 'kw_' + k]);
-
 function generateTokens() {
   let tok = matchAll(typesFile, /[ \t]+kw_(\w+)/g)
     .map(m => m[1])
