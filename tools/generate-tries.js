@@ -54,15 +54,15 @@ function trieToCode(t, depth = 0) {
       if (depth === 0) {
         out += `${ indent }if (cp == '${ char }') {\n`;
       } else if (t.length === 1) {
-        out += `${ indent }if (s._peek() == '${ char }') {\n`;
+        out += `${ indent }if (s.peek() == '${ char }') {\n`;
       } else {
-        out += `${ indent }if (auto n = s._peek(); n == '${ char }') {\n`;
+        out += `${ indent }if (auto n = s.peek(); n == '${ char }') {\n`;
       }
     } else {
       out += ` else if (${ varName } == '${ char }') {\n`;
     }
     if (depth > 0) {
-      out += `${ indent }  s._advance();\n`;
+      out += `${ indent }  s.advance();\n`;
     }
     if (children) {
       out += trieToCode(children, depth + 1);
