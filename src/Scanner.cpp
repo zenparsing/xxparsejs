@@ -103,12 +103,17 @@ struct Scanner {
   }
 
   bool _peek_range(uint32 low, uint32 high) {
+    assert(low != 0 && high != 0);
     auto n = _peek();
     return n >= low && n <= high;
   }
 
   bool _can_shift() {
     return _iter != _end;
+  }
+
+  void _set_token(Token t) {
+    _result.token = t;
   }
 
   void _set_error(Error error) {
@@ -118,10 +123,6 @@ struct Scanner {
 
   void _set_strict_error(Error error) {
     _result.strict_error = error;
-  }
-
-  void _set_token(Token t) {
-    _result.token = t;
   }
 
   void _start(Context context) {
@@ -204,17 +205,15 @@ struct Scanner {
       if (auto n = _shift(); n == '`') {
         return _set_token(cp == '`'
           ? Token::template_basic
-          : Token::template_end
+          : Token::template_tail
         );
       } else if (n == '$' && _peek() == '{') {
         _advance();
         return _set_token(cp == '`'
-          ? Token::template_start
+          ? Token::template_head
           : Token::template_middle
         );
       } else if (n == '\\') {
-        // TODO: template strings can still parse even if escapes
-        // are not valid
         _string_escape(false);
       }
     }
