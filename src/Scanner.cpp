@@ -38,13 +38,19 @@ struct Scanner {
 
   enum class Error {
     none,
+    unexpected_character,
     invalid_hex_escape,
     invalid_unicode_escape,
+    invalid_identifier_escape,
     unterminated_string,
     unterminated_comment,
     unterminated_template,
     unterminated_regexp,
-    invalid_number_literal,
+    missing_exponent,
+    invalid_octal_literal,
+    invalid_hex_literal,
+    invalid_binary_literal,
+    invalid_number_suffix,
     legacy_octal_escape,
     legacy_octal_number,
   };
@@ -71,10 +77,7 @@ struct Scanner {
     _result.strict_error = Error::none;
 
     while (true) {
-      _result.token = _start(context);
-      if (_result.error != Error::none) {
-        _result.token = Token::error;
-      }
+      _start(context);
       if (_result.token != Token::whitespace) {
         _result.end = _position;
         return _result.token;
@@ -110,15 +113,20 @@ struct Scanner {
 
   void _set_error(Error error) {
     _result.error = error;
+    _result.token = Token::error;
   }
 
   void _set_strict_error(Error error) {
     _result.strict_error = error;
   }
 
-  Token _start(Context context) {
+  void _set_token(Token t) {
+    _result.token = t;
+  }
+
+  void _start(Context context) {
     if (!_can_shift()) {
-      return Token::end;
+      return _set_token(Token::end);
     }
 
     if (auto cp = _shift(); cp < 128) {
@@ -127,7 +135,7 @@ struct Scanner {
           return _punctuator(cp);
 
         case TokenStartType::whitespace:
-          return Token::whitespace;
+          return _set_token(Token::whitespace);
 
         case TokenStartType::newline:
           return _newline(cp);
@@ -175,85 +183,86 @@ struct Scanner {
           return context == Context::template_string
             ? _template(cp)
             : _punctuator(cp);
-
-        default:
-          return Token::error;
       }
     } else if (is_newline_char(cp)) {
       return _newline(cp);
     } else if (is_whitespace(cp)) {
-      return Token::whitespace;
+      return _set_token(Token::whitespace);
     } else if (is_identifier_start(cp)) {
       return _identifier(cp);
     }
 
-    return Token::error;
+    _set_error(Error::unexpected_character);
   }
 
-  Token _punctuator(uint32 cp) {
-    return TokenTrie<Scanner>::match_punctuator(*this, cp);
+  void _punctuator(uint32 cp) {
+    _set_token(TokenTrie<Scanner>::match_punctuator(*this, cp));
   }
 
-  Token _template(uint32 cp) {
+  void _template(uint32 cp) {
     while (_can_shift()) {
       if (auto n = _shift(); n == '`') {
-        return cp == '`'
+        return _set_token(cp == '`'
           ? Token::template_basic
-          : Token::template_end;
+          : Token::template_end
+        );
       } else if (n == '$' && _peek() == '{') {
         _advance();
-        return cp == '`'
+        return _set_token(cp == '`'
           ? Token::template_start
-          : Token::template_middle;
+          : Token::template_middle
+        );
       } else if (n == '\\') {
+        // TODO: template strings can still parse even if escapes
+        // are not valid
         _string_escape(false);
       }
     }
-    return Token::error;
+    _set_error(Error::unterminated_template);
   }
 
-  Token _newline(uint32 cp) {
+  void _newline(uint32 cp) {
+    _set_token(Token::whitespace);
     if (cp == '\r' && _peek() == '\n') {
       _advance();
     }
     _result.newline_before = true;
-    return Token::whitespace;
   }
 
-  Token _identifier(uint32 cp) {
-    Token t = TokenTrie<Scanner>::match_keyword(*this, cp);
+  void _identifier(uint32 cp) {
+    _set_token(TokenTrie<Scanner>::match_keyword(*this, cp));
     while (true) {
       if (auto n = _peek(); is_identifier_part(n)) {
-        t = Token::identifier;
+        _set_token(Token::identifier);
         _advance();
       } else if (n == '\\') {
-        t = Token::identifier;
+        _set_token(Token::identifier);
         _advance();
         if (_peek() != 'u') {
-          return Token::error;
+          return _set_error(Error::invalid_identifier_escape);
         }
         _advance();
         if (!_unicode_escape_sequence()) {
-          return Token::error;
+          return _set_error(Error::invalid_identifier_escape);
         }
       } else {
         break;
       }
     }
-    return t;
   }
 
-  Token _number(uint32 cp) {
+  void _number(uint32 cp) {
+    _set_token(Token::number);
     // TODO: set double parser state to whole
     if (cp == '.') {
       // TODO: set double parser state to fraction
-      _decimal_integer();
+      _maybe_decimal_integer();
     } else {
       _decimal_integer(cp);
       if (_peek() == '.') {
         _advance();
         // TODO: set double parser state to fraction
-        _decimal_integer();
+        _maybe_decimal_integer();
       }
     }
 
@@ -266,15 +275,15 @@ struct Scanner {
       } else if (n == '+') {
         _advance();
       }
-      if (!_decimal_integer()) {
-        return Token::error;
+      if (!_maybe_decimal_integer()) {
+        return _set_error(Error::missing_exponent);
       }
     }
 
-    return Token::number;
+    _number_suffix();
   }
 
-  bool _decimal_integer() {
+  bool _maybe_decimal_integer() {
     if (_peek_range('0', '9')) {
       _decimal_integer(_shift());
       return true;
@@ -292,21 +301,22 @@ struct Scanner {
     }
   }
 
-  Token _legacy_octal_number() {
+  void _legacy_octal_number() {
     _set_strict_error(Error::legacy_octal_number);
-    return _octal_integer();
+    _octal_integer();
   }
 
-  Token _octal_number() {
+  void _octal_number() {
     assert(_peek() == 'o');
     _advance();
-    return _octal_integer();
+    _octal_integer();
   }
 
-  Token _octal_integer() {
+  void _octal_integer() {
     if (!_peek_range('0', '7')) {
-      return Token::error;
+      return _set_error(Error::invalid_octal_literal);
     }
+    _set_token(Token::number);
     _advance();
     while (true) {
       if (_peek_range('0', '7')) {
@@ -316,29 +326,29 @@ struct Scanner {
       }
     }
     _number_suffix();
-    return Token::number;
   }
 
-  Token _hex_number() {
+  void _hex_number() {
     assert(_peek() == 'x');
     _advance();
     if (!hex_char_value(_peek())) {
-      return Token::error;
+      return _set_error(Error::invalid_hex_literal);
     }
+    _set_token(Token::number);
     _advance();
     while (hex_char_value(_peek())) {
       _advance();
     }
     _number_suffix();
-    return Token::number;
   }
 
-  Token _binary_number() {
+  void _binary_number() {
     assert(_peek() == 'b');
     _advance();
     if (!_peek_range('0', '1')) {
-      return Token::error;
+      return _set_error(Error::invalid_binary_literal);
     }
+    _set_token(Token::number);
     _advance();
     while (true) {
       if (_peek_range('0', '1')) {
@@ -348,21 +358,22 @@ struct Scanner {
       }
     }
     _number_suffix();
-    return Token::number;
   }
 
   void _number_suffix() {
     // TODO: we may need to match for unicode escape sequences as well
     if (auto n = _peek(); n < 128) {
       if (token_start_table[n] == TokenStartType::identifier) {
-        _set_error(Error::invalid_number_literal);
+        _set_error(Error::invalid_number_suffix);
       }
     } else if (is_identifier_start(n)) {
-      _set_error(Error::invalid_number_literal);
+      _set_error(Error::invalid_number_suffix);
     }
   }
 
-  Token _regexp() {
+  void _regexp() {
+    _set_token(Token::regexp);
+
     bool backslash = false;
     bool in_class = false;
 
@@ -379,34 +390,36 @@ struct Scanner {
         backslash = true;
       } else if (n == '/' && !in_class) {
         // TODO: this could be a unicode escape sequence as well
-        while (is_identifier_part(_peek())) {
-          _advance();
-        }
-        return Token::regexp;
+        _regexp_flags();
+        return;
       }
     }
 
     _set_error(Error::unterminated_regexp);
-    return Token::error;
   }
 
-  Token _line_comment() {
+  void _regexp_flags() {
+    // TODO: this could be a unicode escape sequence as well
+    // TODO: validate flags here?
+    while (is_identifier_part(_peek())) {
+      _advance();
+    }
+  }
+
+  void _line_comment() {
     assert(_peek() == '/');
     _advance();
+    _set_token(Token::comment);
     while (_can_shift() && !is_newline_char(_peek())) {
       _advance();
     }
-    return Token::comment;
   }
 
-  Token _block_comment() {
+  void _block_comment() {
     assert(_peek() == '*');
     _advance();
-    while (true) {
-      if (!_can_shift()) {
-        _set_error(Error::unterminated_comment);
-        return Token::error;
-      }
+    _set_token(Token::comment);
+    while (_can_shift()) {
       if (auto cp = _shift(); is_newline_char(cp)) {
         if (cp == '\r' && _peek() == '\n') {
           _advance();
@@ -414,16 +427,17 @@ struct Scanner {
         _result.newline_before = true;
       } else if (cp == '*' && _peek() == '/') {
         _advance();
-        break;
+        return;
       }
     }
-    return Token::comment;
+    _set_error(Error::unterminated_comment);
   }
 
-  Token _string(uint32 delim) {
+  void _string(uint32 delim) {
+    _set_token(Token::string);
     while (_can_shift()) {
       if (auto n = _shift(); n == delim) {
-        return Token::string;
+        return;
       } else if (n == '\\') {
         _string_escape(true);
       } else if (n == '\r' || n == '\n') {
@@ -431,7 +445,6 @@ struct Scanner {
       }
     }
     _set_error(Error::unterminated_string);
-    return Token::error;
   }
 
   optional<uint32> _string_escape(bool allow_legacy_octal = false) {
