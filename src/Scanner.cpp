@@ -244,28 +244,29 @@ struct Scanner {
   }
 
   Token _number(uint32 cp) {
+    // TODO: set double parser state to whole
     if (cp == '.') {
+      // TODO: set double parser state to fraction
       _decimal_integer();
     } else {
       _decimal_integer(cp);
       if (_peek() == '.') {
         _advance();
+        // TODO: set double parser state to fraction
         _decimal_integer();
       }
     }
 
     if (auto n = _peek(); n == 'e' || n == 'E') {
       _advance();
-      bool neg = false;
+      // TODO: set double parser state to exponent
       if (auto n = _peek(); n == '-') {
         _advance();
-        neg = true;
+        // TODO: set double parser state to negative exponent
       } else if (n == '+') {
         _advance();
       }
-      if (_peek_range('0', '9')) {
-        _decimal_integer(_shift());
-      } else {
+      if (!_decimal_integer()) {
         return Token::error;
       }
     }
@@ -273,19 +274,22 @@ struct Scanner {
     return Token::number;
   }
 
-  double _decimal_integer() {
-    return _peek_range('0', '9')
-      ? _decimal_integer(_shift())
-      : 0;
+  bool _decimal_integer() {
+    if (_peek_range('0', '9')) {
+      _decimal_integer(_shift());
+      return true;
+    }
+    return false;
   }
 
-  double _decimal_integer(uint32 cp) {
+  void _decimal_integer(uint32 cp) {
     assert(cp >= '0' && cp <= '9');
-    double val = cp - '0';
+    int val = cp - '0';
+    // TODO: send value to double parser
     while (_peek_range('0', '9')) {
-      val = val * 10 + _shift() - '0';
+      // TODO: send value to double parser
+      val = _shift() - '0';
     }
-    return val;
   }
 
   Token _legacy_octal_number() {
@@ -348,6 +352,7 @@ struct Scanner {
   }
 
   void _number_suffix() {
+    // TODO: we may need to match for unicode escape sequences as well
     if (auto n = _peek(); n < 128) {
       if (token_start_table[n] == TokenStartType::identifier) {
         _set_error(Error::invalid_number_literal);
@@ -373,6 +378,7 @@ struct Scanner {
       } else if (n == '\\') {
         backslash = true;
       } else if (n == '/' && !in_class) {
+        // TODO: this could be a unicode escape sequence as well
         while (is_identifier_part(_peek())) {
           _advance();
         }
@@ -381,7 +387,7 @@ struct Scanner {
     }
 
     _set_error(Error::unterminated_regexp);
-    return Token::regexp;
+    return Token::error;
   }
 
   Token _line_comment() {
@@ -399,7 +405,7 @@ struct Scanner {
     while (true) {
       if (!_can_shift()) {
         _set_error(Error::unterminated_comment);
-        break;
+        return Token::error;
       }
       if (auto cp = _shift(); is_newline_char(cp)) {
         if (cp == '\r' && _peek() == '\n') {
@@ -430,13 +436,10 @@ struct Scanner {
 
   optional<uint32> _string_escape(bool allow_legacy_octal = false) {
     if (!_can_shift()) {
-      _set_error(Error::unterminated_string);
       return {};
     }
 
-    uint32 cp = _shift();
-
-    switch (cp) {
+    switch (uint32 cp = _shift()) {
       case 't': return '\t';
       case 'b': return '\b';
       case 'v': return '\v';
@@ -456,7 +459,7 @@ struct Scanner {
         return {};
 
       case '0':
-        if (_peek_range('0', '7')) {
+        if (allow_legacy_octal && _peek_range('0', '7')) {
           return _string_escape_octal(cp, 2);
         }
         return {0};
@@ -464,13 +467,13 @@ struct Scanner {
       case '1':
       case '2':
       case '3':
-        return _string_escape_octal(cp, 2);
+        return allow_legacy_octal ? _string_escape_octal(cp, 2) : cp;
 
       case '4':
       case '5':
       case '6':
       case '7':
-        return _string_escape_octal(cp, 1);
+        return allow_legacy_octal ? _string_escape_octal(cp, 1) : cp;
 
       case 'x':
         if (auto v = _string_escape_hex(2)) {
@@ -491,11 +494,9 @@ struct Scanner {
   optional<uint32> _unicode_escape_sequence() {
     if (_peek() == '{') {
       _advance();
-      if (auto v = _string_escape_hex(1, 6)) {
-        if (_peek() == '}') {
-          _advance();
-          return v;
-        }
+      if (auto v = _string_escape_hex(1, 6); v && _peek() == '}') {
+        _advance();
+        return v;
       }
     } else {
       if (auto v = _string_escape_hex(4)) {
@@ -559,11 +560,9 @@ struct Scanner {
     if (cp == '\n' || cp == '\r') {
       return true;
     }
-
     if (ascii_only) {
       return false;
     }
-
     return cp == 0x2028 || cp == 0x2029;
   }
 
