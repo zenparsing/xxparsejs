@@ -361,6 +361,7 @@ struct Scanner {
   void number_suffix() {
     // TODO: we may need to match for unicode escape sequences as well
     if (auto n = peek(); n < 128) {
+
       if (token_start_table[n] == TokenStartType::identifier) {
         set_error(Error::invalidnumber_suffix);
       }
@@ -567,14 +568,15 @@ struct Scanner {
     return {};
   }
 
-  static bool is_newline_char(uint32 cp, bool ascii_only = false) {
-    if (cp == '\n' || cp == '\r') {
-      return true;
+  static bool is_newline_char(uint32 cp) {
+    switch (cp) {
+      case '\n':
+      case '\r':
+      case 0x2028:
+      case 0x2029:
+        return true;
     }
-    if (ascii_only) {
-      return false;
-    }
-    return cp == 0x2028 || cp == 0x2029;
+    return false;
   }
 
   T _iter;
