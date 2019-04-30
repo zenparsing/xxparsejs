@@ -11,18 +11,6 @@ import TokenTrie;
 
 using std::optional;
 
-export bool is_strict_reserved_word(Token t) {
-  return
-    t > Token::kw_strict_reserved_begin &&
-    t < Token::kw_strict_reserved_end;
-}
-
-export bool is_contextual_keyword(Token t) {
-  return
-    t > Token::kw_contextual_begin &&
-    t < Token::kw_contextual_end;
-}
-
 export Token;
 
 export using SourcePosition = uint32;
@@ -45,26 +33,30 @@ struct Scanner {
     unterminated_string,
     unterminated_comment,
     unterminated_template,
-    unterminatedregexp,
+    unterminated_regexp,
     missing_exponent,
     invalid_octal_literal,
     invalid_hex_literal,
     invalid_binary_literal,
-    invalidnumber_suffix,
+    invalid_number_suffix,
     legacy_octal_escape,
     legacy_octal_number,
   };
 
   struct Result {
     Token token {Token::error};
+    Token keyword {Token::error};
     SourcePosition start {0};
     SourcePosition end {0};
     bool newline_before {false};
     Error error {Error::none};
-    Error strict_error {Error::none};
   };
 
   Scanner(T& begin, T& end) : _iter {begin}, _end {end} {}
+
+  void set_strict_mode(bool strict_mode) {
+    _strict_mode = strict_mode;
+  }
 
   Token next(Context context = Context::expression) {
     if (_result.token != Token::comment) {
@@ -73,7 +65,6 @@ struct Scanner {
 
     _result.start = _position;
     _result.error = Error::none;
-    _result.strict_error = Error::none;
 
     while (true) {
       start(context);
@@ -121,7 +112,9 @@ struct Scanner {
   }
 
   void set_strict_error(Error error) {
-    _result.strict_error = error;
+    if (_strict_mode) {
+      _result.error = error;
+    }
   }
 
   void start(Context context) {
@@ -228,7 +221,17 @@ struct Scanner {
   }
 
   void identifier(uint32 cp) {
-    set_token(TokenTrie<Scanner>::match_keyword(*this, cp));
+    if (
+      auto kw = TokenTrie<Scanner>::match_keyword(*this, cp);
+      kw > Token::kw_contextual_begin ||
+      !_strict_mode && kw > Token::kw_strict_begin
+    ) {
+      set_token(Token::identifier);
+      _result.keyword = kw;
+    } else {
+      set_token(kw);
+    }
+
     while (true) {
       if (auto n = peek(); is_identifier_part(n)) {
         set_token(Token::identifier);
@@ -251,25 +254,20 @@ struct Scanner {
 
   void number(uint32 cp) {
     set_token(Token::number);
-    // TODO: set double parser state to whole
     if (cp == '.') {
-      // TODO: set double parser state to fraction
       maybe_decimal_integer();
     } else {
       decimal_integer(cp);
       if (peek() == '.') {
         advance();
-        // TODO: set double parser state to fraction
         maybe_decimal_integer();
       }
     }
 
     if (auto n = peek(); n == 'e' || n == 'E') {
       advance();
-      // TODO: set double parser state to exponent
       if (auto n = peek(); n == '-') {
         advance();
-        // TODO: set double parser state to negative exponent
       } else if (n == '+') {
         advance();
       }
@@ -292,9 +290,7 @@ struct Scanner {
   void decimal_integer(uint32 cp) {
     assert(cp >= '0' && cp <= '9');
     int val = cp - '0';
-    // TODO: send value to double parser
     while (peek_range('0', '9')) {
-      // TODO: send value to double parser
       val = shift() - '0';
     }
   }
@@ -361,12 +357,11 @@ struct Scanner {
   void number_suffix() {
     // TODO: we may need to match for unicode escape sequences as well
     if (auto n = peek(); n < 128) {
-
       if (token_start_table[n] == TokenStartType::identifier) {
-        set_error(Error::invalidnumber_suffix);
+        set_error(Error::invalid_number_suffix);
       }
     } else if (is_identifier_start(n)) {
-      set_error(Error::invalidnumber_suffix);
+      set_error(Error::invalid_number_suffix);
     }
   }
 
@@ -394,7 +389,7 @@ struct Scanner {
       }
     }
 
-    set_error(Error::unterminatedregexp);
+    set_error(Error::unterminated_regexp);
   }
 
   void regexp_flags() {
@@ -581,6 +576,7 @@ struct Scanner {
 
   T _iter;
   T _end;
+  bool _strict_mode {false};
   SourcePosition _position {0};
   Result _result;
 

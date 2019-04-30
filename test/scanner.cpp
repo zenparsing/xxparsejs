@@ -12,10 +12,16 @@ using std::vector;
 void test(
   const string& test_name,
   const string& input,
-  const vector<Token>& expected
+  const vector<Token>& expected,
+  bool strict_mode = false
 ) {
   Scanner scanner {input.begin(), input.end()};
   vector<Token> actual;
+
+  if (strict_mode) {
+    scanner.set_strict_mode(true);
+  }
+
   while (true) {
     Token t = scanner.next();
     actual.push_back(t);
@@ -23,6 +29,7 @@ void test(
       break;
     }
   }
+
   if (!std::equal(actual.begin(), actual.end(), expected.begin())) {
     std::cerr
       << "[" << test_name << "]\n"
@@ -33,8 +40,17 @@ void test(
     for (auto t : actual) {
       std::cerr << "- " << t << "\n";
     }
+
     std::exit(1);
   }
+}
+
+void test_strict(
+  const string& test_name,
+  const string& input,
+  const vector<Token>& expected
+) {
+  test(test_name, input, expected, true);
 }
 
 void test_number() {
@@ -213,6 +229,24 @@ void test_identifier() {
   });
 
   test("Identifier - unicode escape", "a\\u{62}c;", {
+    Token::identifier,
+    Token::semicolon,
+    Token::end,
+  });
+
+  test("Identifier - strict identifier in non-strict mode", "let;", {
+    Token::identifier,
+    Token::semicolon,
+    Token::end,
+  });
+
+  test_strict("Identifier - strict identifier in strict mode", "let;", {
+    Token::kw_let,
+    Token::semicolon,
+    Token::end,
+  });
+
+  test("Identifier - contextual keyword", "await;", {
     Token::identifier,
     Token::semicolon,
     Token::end,
