@@ -87,7 +87,6 @@ export class MsvsCompiler {
   initialize({ outputDirectory, host, target }) {
     this._out = outputDirectory;
     this._env = getEnvVars(outputDirectory, host, target);
-    console.log(this._env);
   }
 
   moduleOutputFile(name) {
