@@ -10,7 +10,18 @@ function findEnvCmd() {
     throw new Error('Unable to find "Program Files (x86)" directory');
   }
 
-  let folder = Path.resolve(base, 'Microsoft Visual Studio/2017');
+  let vsRoot = Path.resolve(base, 'Microsoft Visual Studio');
+  let versions = FS.readdirSync(vsRoot)
+    .sort()
+    .filter(dir => /\d+/.test(dir) || dir === 'Preview');
+
+  if (versions.length === 0) {
+    throw new Error('Unable to find Visual Studio version directories');
+  }
+
+  let version = versions.pop();
+  let folder = Path.resolve(base, 'Microsoft Visual Studio', version);
+
   for (const child of FS.readdirSync(folder)) {
     let tryPath = Path.resolve(folder, child, 'VC/Auxiliary/Build/vcvarsall.bat');
     if (FS.existsSync(tryPath)) {
@@ -76,6 +87,7 @@ export class MsvsCompiler {
   initialize({ outputDirectory, host, target }) {
     this._out = outputDirectory;
     this._env = getEnvVars(outputDirectory, host, target);
+    console.log(this._env);
   }
 
   moduleOutputFile(name) {
