@@ -4,6 +4,7 @@ import { spawnSync } from 'child_process';
 
 import { compile } from './tools/compiler/compile.js';
 import { parseArgs } from './tools/parse-args.js';
+import { emptyDir } from './tools/empty-dir.js';
 
 const dirname = Path.dirname(fileURLToPath(import.meta.url));
 const sourceDirectory = Path.resolve(dirname, './src');
@@ -19,7 +20,7 @@ async function resolveModule(name) {
 }
 
 let args = parseArgs({
-  flags: ['--run'],
+  flags: ['--run', '--clean'],
   alias: {
     '-r': '--run',
   },
@@ -29,6 +30,10 @@ let main = args[0];
 if (!main) {
   console.log('No main module specified');
   process.exit(1);
+}
+
+if (args.named.has('--clean')) {
+  emptyDir(outputDirectory);
 }
 
 compile({

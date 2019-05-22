@@ -59,6 +59,8 @@ export async function compile(options) {
     await AFS.mkdir(outputDirectory);
   }
 
+  log('Initializing environment');
+
   await compiler.initialize({
     outputDirectory,
     host,
