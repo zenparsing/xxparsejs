@@ -1,8 +1,4 @@
-#include <algorithm>
-#include <iostream>
-#include <string>
-#include <vector>
-
+import std.core;
 import Scanner;
 import test.TokenStrings;
 

@@ -74,6 +74,8 @@ export async function compile(options) {
 
   await walk(main, resolveModule, async info => {
     info.output = compiler.moduleOutputFile(info.name);
+    info.main = (info.name === main);
+
     outputs.unshift(info.output);
 
     if (!info.imports.some(id => compiled.has(id))) {
@@ -94,15 +96,17 @@ export async function compile(options) {
     }
   });
 
-  let linkOutput = compiler.linkOutputFile(main);
+  let linkOutput = Path.resolve(
+    outputDirectory,
+    compiler.linkOutputFile(main));
+
   log(`Linking ${ target } -> ${ linkOutput }`);
 
-  // TODO: call link if link output file is missing
-  if (compiled.size > 0) {
+  if (compiled.size > 0 || !await AFS.exists(linkOutput)) {
     await compiler.link({ outputs });
   }
 
-  return Path.resolve(outputDirectory, linkOutput);
+  return linkOutput;
 }
 
 async function getImportsFromFile(filename) {
@@ -122,6 +126,11 @@ export async function walk(name, resolveModule, callback, moduleMap = new Map())
     case 'visited': return;
   }
 
+  if (name.startsWith('std.')) {
+    moduleMap.set(name, 'visited');
+    return;
+  }
+
   moduleMap.set(name, 'visiting');
 
   let filename = await resolveModule(name);
@@ -136,6 +145,7 @@ export async function walk(name, resolveModule, callback, moduleMap = new Map())
     filename,
     imports,
     output: '',
+    main: false,
   });
 
   moduleMap.set(name, 'visited');

@@ -1,8 +1,8 @@
-#include <optional>
 #include <cassert>
 
 export module Scanner;
 
+import std.core;
 import BasicTypes;
 import Unicode;
 import Token;

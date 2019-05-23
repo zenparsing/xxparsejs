@@ -101,11 +101,12 @@ export class MsvsCompiler {
     return getHostArch();
   }
 
-  compileModule({ filename, output }) {
+  compileModule({ filename, output, main }) {
     this._cl(
       '/c',
       `/Fo${output}`,
-      '/module:interface', filename
+      ...(main ? [] : ['/module:interface']),
+      filename
     );
   }
 
